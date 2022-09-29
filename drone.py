@@ -14,6 +14,7 @@ class Drone:
         self.armed = False
         self.onMission = False
         self.battery = 100
+        self.position = []
 
     async def connect(self):
         self.output = "Connecting.."
@@ -154,14 +155,15 @@ class Drone:
 
         mission_progress_task = asyncio.ensure_future(
             self.mission_progress())
+        drone_position_task = asyncio.ensure_future(
+            self.update_drone_position())
 
-        running_tasks = [mission_progress_task]
+        running_tasks = [mission_progress_task, drone_position_task]
         termination_task = asyncio.ensure_future(
             self.observe_is_in_air(running_tasks))
 
         await termination_task
         self.onMission = False
-        self.airborne = False
         self.armed = False
         self.output = "Mission finished"
 
@@ -172,6 +174,14 @@ class Drone:
                 return
             if mission_progress.current == mission_progress.total:
                 await self.drone.action.land()
+                self.airborne = False
+                return
+
+    async def update_drone_position(self):
+        async for position in self.drone.telemetry.position():
+            self.position[0] = position.latitude_deg
+            self.position[1] = position.longitude_deg
+            if not self.airborne:
                 return
 
     async def observe_is_in_air(self, running_tasks):

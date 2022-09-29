@@ -73,9 +73,16 @@ class Application:
     def launchDrone(self, _):
         self.controller.callLaunchMission()
 
+    def updateDroneOnMap(self):
+        lat, lon = self.controller.drone.position
+        self.app.map.center_on(lat, lon)
+        self.app.markerStart.lat = lat
+        self.app.markerStart.lon = lon
+
     def status(self):
         while self.app.running:
             self.app.errorLabel.text = self.controller.drone.output
+            self.updateDroneOnMap()
             time.sleep(1)
         self.controller.loop.stop()
         self.executor.shutdown()

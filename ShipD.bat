@@ -1,1 +1,0 @@
-python C:\Users\Rares\Desktop\shipd\harta\main.py
