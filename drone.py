@@ -14,7 +14,7 @@ class Drone:
         self.armed = False
         self.onMission = False
         self.battery = 100
-        self.position = []
+        self.position = [None, None]
 
     async def connect(self):
         self.output = "Connecting.."
@@ -38,6 +38,8 @@ class Drone:
             self.output = "Armed"
         except RuntimeError as re:
             self.output = "Failure - not connected to drone"
+        except ActionError as ae:
+            self.output = "Failure - GPS not connected"
 
     async def disarm(self):
         if not self.armed:
@@ -65,6 +67,8 @@ class Drone:
             self.output = "Taking off"
         except RuntimeError as re:
             self.output = "Failure - not connected to drone"
+        except ActionError as ae:
+            self.output = "Failure - GPS not connected"
 
     async def land(self):
         if not self.airborne:

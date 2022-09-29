@@ -75,9 +75,9 @@ class Application:
 
     def updateDroneOnMap(self):
         lat, lon = self.controller.drone.position
-        self.app.map.center_on(lat, lon)
-        self.app.markerStart.lat = lat
-        self.app.markerStart.lon = lon
+        if lat is not None and lon is not None:
+            self.app.markerStart.lat = lat
+            self.app.markerStart.lon = lon
 
     def status(self):
         while self.app.running:
