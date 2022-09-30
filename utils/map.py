@@ -20,9 +20,9 @@ def computeBattery(current, dist):
 
 
 def arrivalTime(speed, dist):
-    hours = dist/speed
-    minutes = hours * 60 + 0.16
-    return int(minutes)
+    hours = dist / speed
+    minutes = hours * 60 + 0.5
+    return round(minutes, 1)
 
 
 def opposite(direction, wind):
@@ -39,7 +39,7 @@ def convert(degrees):
 
 
 def distance(coord1, coord2):
-    return int(geopy.distance.geodesic(coord1, coord2).km)
+    return round(geopy.distance.geodesic(coord1, coord2).km, 2)
 
 
 def compass(coord1, coord2):

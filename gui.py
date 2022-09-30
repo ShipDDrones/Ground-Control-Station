@@ -4,6 +4,7 @@ from kivy.graphics import Rectangle
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.image import Image
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy_garden.mapview import MapView, MapMarker
@@ -26,8 +27,7 @@ class Background(Screen):
 
 
 class ShipD(App):
-
-    Window.size = (1100, 700)
+    Window.size = (1400, 700)
 
     def __init__(self, **kwargs):
         super().__init__()
@@ -41,18 +41,23 @@ class ShipD(App):
         self.disarmButton = None
         self.connectButton = None
         self.arrivalTime = None
+        self.distance = None
         self.endLabel = None
         self.wind = None
         self.weather = None
-        self.startLabel = None
         self.destination = None
+        self.liveBattery = None
+        self.altitude = None
+        self.speed = None
+        self.timeLeft = None
+        self.attachedImage = None
         self.map = None
-        self.droneStart = None
+        self.isDroneSet = None
         self.markerStart = None
         self.markerEnd = None
         self.errorLabel = Label(text="All is well", font_size='25sp', markup=True,
                                 size_hint=(1, 0.2))
-        self.droneStartButton = Button(text="[font=Bahnschrift]Set drone location[/font]",
+        self.droneStartButton = Button(text="[font=Bahnschrift]Get drone location[/font]",
                                        size_hint=(.1, .1),
                                        markup=True)
         self.destinationButton = Button(text="[font=Bahnschrift]Set drone destination[/font]",
@@ -64,6 +69,8 @@ class ShipD(App):
         self.takeoffButton = Button(text="[font=Bahnschrift]Takeoff[/font]", markup=True)
         self.landButton = Button(text="[font=Bahnschrift]Land[/font]", markup=True)
         self.launchButton = Button(text="[font=Bahnschrift]Launch mission[/font]", markup=True)
+        self.checkButton = Button(text="[font=Bahnschrift]Check package[/font]", markup=True, font_size=20,
+                                  size_hint=(1, 0.07))
 
     def onClose(self, _):
         self.running = False
@@ -89,10 +96,10 @@ class ShipD(App):
         self.destination = TextInput(font_size=20,
                                      size_hint=(.2, .1))
 
-        self.droneStart = TextInput(font_size=20,
-                                    size_hint=(.2, .1))
+        self.isDroneSet = Label(text="[font=Bahnschrift]Missing drone position[/font]", size_hint=(.2, .1),
+                                font_size='15sp', markup=True)
 
-        locations.add_widget(self.droneStart)
+        locations.add_widget(self.isDroneSet)
         locations.add_widget(self.droneStartButton)
         locations.add_widget(self.destination)
         locations.add_widget(self.destinationButton)
@@ -107,15 +114,15 @@ class ShipD(App):
 
         missionInfo = GridLayout(cols=2, spacing=10, size_hint=(1, 0.4))
 
-        self.startLabel = Label(text="[font=Bahnschrift]No destination set[/font]", font_size='15sp', markup=True)
-
-        self.endLabel = Label(text="[font=Bahnschrift]No starting position[/font]", font_size='15sp', markup=True)
+        self.endLabel = Label(text="[font=Bahnschrift]No destination set[/font]", font_size='15sp', markup=True)
 
         self.weather = Label(text="[font=Bahnschrift]Weather[/font]", font_size='15sp', markup=True)
 
         self.wind = Label(text="[font=Bahnschrift]Wind speed[/font]", font_size='15sp', markup=True)
 
         self.arrivalTime = Label(text="[font=Bahnschrift]Arrival time[/font]", font_size='15sp', markup=True)
+
+        self.distance = Label(text="[font=Bahnschrift]Distance to destination[/font]", font_size='15sp', markup=True)
 
         self.batteryLeft = Label(text="[font=Bahnschrift]Battery left on arrival[/font]", font_size='15sp', markup=True)
 
@@ -124,12 +131,13 @@ class ShipD(App):
 
         droneControl = GridLayout(cols=2, spacing=20, size_hint=(1, 0.3))
 
-        missionInfo.add_widget(self.startLabel)
         missionInfo.add_widget(self.endLabel)
+        missionInfo.add_widget(self.arrivalTime)
         missionInfo.add_widget(self.weather)
         missionInfo.add_widget(self.wind)
-        missionInfo.add_widget(self.arrivalTime)
         missionInfo.add_widget(self.batteryLeft)
+        missionInfo.add_widget(self.distance)
+
         droneControl.add_widget(self.connectButton)
         droneControl.add_widget(self.armButton)
         droneControl.add_widget(self.disarmButton)
@@ -143,8 +151,36 @@ class ShipD(App):
         rightSide.add_widget(droneControl)
         rightSide.add_widget(self.errorLabel)
 
+        moreRightSide = BoxLayout(orientation='vertical', size_hint=(0.5, 1), spacing=10)
+
+        flightLabel = Label(text="[font=Bahnschrift]Flight information[/font]", font_size='25sp', markup=True,
+                            size_hint=(1, 0.1))
+
+        self.liveBattery = Label(text="[font=Bahnschrift]Current battery - [/font]", font_size='20sp', markup=True,
+                                 size_hint=(1, 0.1))
+
+        self.altitude = Label(text="[font=Bahnschrift]Current altitude - [/font]", font_size='20sp', markup=True,
+                              size_hint=(1, 0.1))
+
+        self.speed = Label(text="[font=Bahnschrift]Current ground speed - [/font]", font_size='20sp', markup=True,
+                           size_hint=(1, 0.1))
+
+        self.timeLeft = Label(text="[font=Bahnschrift]Time until arrival - [/font]", font_size='20sp', markup=True,
+                              size_hint=(1, 0.1))
+
+        self.attachedImage = Image(size_hint=(1, 0.3))
+
+        moreRightSide.add_widget(flightLabel)
+        moreRightSide.add_widget(self.liveBattery)
+        moreRightSide.add_widget(self.altitude)
+        moreRightSide.add_widget(self.speed)
+        moreRightSide.add_widget(self.timeLeft)
+        moreRightSide.add_widget(self.attachedImage)
+        moreRightSide.add_widget(self.checkButton)
+
         both.add_widget(leftSide)
         both.add_widget(rightSide)
+        both.add_widget(moreRightSide)
 
         screen.add_widget(both)
 

@@ -1,4 +1,5 @@
 import asyncio
+import math
 
 from mavsdk import System
 from mavsdk.action import *
@@ -14,14 +15,18 @@ class Drone:
         self.armed = False
         self.onMission = False
         self.battery = 100
-        self.position = [None, None]
+        self.speed = 0
+        self.altitude = 0
+        self.connected = False
+        self.position = (None, None)
 
     async def connect(self):
         self.output = "Connecting.."
         try:
             # await asyncio.wait_for(self.drone.connect(system_address="udp://:14540"), timeout=5)
-            await asyncio.wait_for(self.drone.connect(system_address="serial:///COM3:57600"), timeout=5)
+            await asyncio.wait_for(self.drone.connect(system_address="serial:///COM8:57600"), timeout=5)
             self.output = "Connected"
+            self.connected = True
         except asyncio.TimeoutError:
             self.output = "Failed to connect"
 
@@ -81,66 +86,33 @@ class Drone:
         except RuntimeError as re:
             self.output = "Failure - not connected to drone"
 
-    # async def goNorth(self, newLat, newLon):
-    #     if not self.airborne:
-    #         self.output = "Drone is not armed"
-    #         return
-    #     try:
-    #         async for terrain_info in self.drone.telemetry.home():
-    #             absolute_altitude = terrain_info.absolute_altitude_m
-    #             break
-    #         await self.drone.action.goto_location(newLat, newLon, absolute_altitude, 0)
-
     async def launch(self, destination):
-
-        mission_items = []
-        # mission_items.append(MissionItem(47.398039859999997,
-        #                                  8.5455725400000002,
-        #                                  25,
-        #                                  10,
-        #                                  True,
-        #                                  float('nan'),
-        #                                  float('nan'),
-        #                                  MissionItem.CameraAction.NONE,
-        #                                  float('nan'),
-        #                                  float('nan'),
-        #                                  float('nan'),
-        #                                  float('nan'),
-        #                                  float('nan')))
-        mission_items.append(MissionItem(destination[0],
-                                         destination[1],
-                                         25,
-                                         10,
-                                         True,
-                                         float('nan'),
-                                         float('nan'),
-                                         MissionItem.CameraAction.NONE,
-                                         float('nan'),
-                                         float('nan'),
-                                         float('nan'),
-                                         float('nan'),
-                                         float('nan')))
-        # mission_items.append(MissionItem(47.397825620791885,
-        #                                  8.5450092830163271,
-        #                                  25,
-        #                                  10,
-        #                                  True,
-        #                                  float('nan'),
-        #                                  float('nan'),
-        #                                  MissionItem.CameraAction.NONE,
-        #                                  float('nan'),
-        #                                  float('nan'),
-        #                                  float('nan'),
-        #                                  float('nan'),
-        #                                  float('nan')))
-
-        mission_plan = MissionPlan(mission_items)
 
         try:
             await self.drone.mission.set_return_to_launch_after_mission(False)
         except RuntimeError as re:
             self.output = "Failure - not connected to drone"
             return
+
+        if destination[0] is None or destination[1] is None:
+            self.output = "Failure - start and destination not clear"
+            return
+
+        mission_items = [MissionItem(destination[0],
+                                     destination[1],
+                                     25,
+                                     10,
+                                     True,
+                                     float('nan'),
+                                     float('nan'),
+                                     MissionItem.CameraAction.NONE,
+                                     float('nan'),
+                                     float('nan'),
+                                     float('nan'),
+                                     float('nan'),
+                                     float('nan'))]
+
+        mission_plan = MissionPlan(mission_items)
 
         await self.drone.mission.upload_mission(mission_plan)
 
@@ -161,8 +133,12 @@ class Drone:
             self.mission_progress())
         drone_position_task = asyncio.ensure_future(
             self.update_drone_position())
+        drone_battery_task = asyncio.ensure_future(
+            self.update_drone_battery())
+        drone_speed_task = asyncio.ensure_future(
+            self.update_drone_speed())
 
-        running_tasks = [mission_progress_task, drone_position_task]
+        running_tasks = [mission_progress_task, drone_position_task, drone_battery_task, drone_speed_task]
         termination_task = asyncio.ensure_future(
             self.observe_is_in_air(running_tasks))
 
@@ -174,19 +150,32 @@ class Drone:
     async def mission_progress(self):
         async for mission_progress in self.drone.mission.mission_progress():
             self.output = "Mission progress: " + str(mission_progress.current) + "/" + str(mission_progress.total)
-            if not self.airborne:
-                return
             if mission_progress.current == mission_progress.total:
                 await self.drone.action.land()
                 self.airborne = False
                 return
 
+    async def get_start_position(self):
+        if not self.connected:
+            self.output = "Not connected to drone"
+            return
+
+        async for position in self.drone.telemetry.position():
+            self.position = (position.latitude_deg, position.longitude_deg)
+            return
+
+    async def update_drone_speed(self):
+        async for data in self.drone.telemetry.velocity_ned():
+            self.speed = round(math.sqrt(data.east_m_s * data.east_m_s + data.north_m_s * data.north_m_s) * 3.6, 2)
+
+    async def update_drone_battery(self):
+        async for battery in self.drone.telemetry.battery():
+            self.battery = round(battery.remaining_percent * 100, 1)
+
     async def update_drone_position(self):
         async for position in self.drone.telemetry.position():
-            self.position[0] = position.latitude_deg
-            self.position[1] = position.longitude_deg
-            if not self.airborne:
-                return
+            self.position = (position.latitude_deg, position.longitude_deg)
+            self.altitude = round(position.relative_altitude_m, 3)
 
     async def observe_is_in_air(self, running_tasks):
 
@@ -199,7 +188,8 @@ class Drone:
 
             if was_in_air and not is_in_air:
                 for task in running_tasks:
-                    task.cancel()
+                    if not self.airborne:
+                        task.cancel()
                     try:
                         await task
                     except asyncio.CancelledError:

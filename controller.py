@@ -1,6 +1,8 @@
+import asyncio
 import threading
 
 from drone import *
+from utils.database import Database
 from utils.weatherapi import Weather
 from utils.map import *
 
@@ -9,10 +11,14 @@ class Controller:
 
     def __init__(self):
         self.drone = Drone()
+        self.database = Database()
         self.loop = asyncio.get_event_loop()
         self.weather = Weather()
         self.destinationCoords = (None, None)
         self.droneCoords = (None, None)
+
+    def checkIfAttached(self):
+        return self.database.isAttached()
 
     def setWeather(self, lat, lon):
         self.weather.requestInfo(lat, lon)
@@ -28,6 +34,9 @@ class Controller:
         if desc is None or temp is None:
             return "Couldn't get weather"
         return str(desc) + " - " + str(temp) + " C"
+
+    def getDistance(self):
+        return distance(self.droneCoords, self.destinationCoords)
 
     def getDuration(self):
         bearing = compass(self.droneCoords, self.destinationCoords)
@@ -63,6 +72,15 @@ class Controller:
             t.start()
         else:
             self.drone.output = "A mission is already en route"
+
+    def callUpdateDroneLocation(self):
+        if self.drone.onMission:
+            asyncio.run_coroutine_threadsafe(self.drone.get_start_position(), self.loop)
+        else:
+            self.loop.run_until_complete(self.drone.get_start_position())
+
+    def checkLocation(self):
+        self.droneCoords = self.drone.position
 
     def callTakeoff(self):
         if self.drone.onMission:
